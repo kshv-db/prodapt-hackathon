@@ -32,7 +32,7 @@ export function factSheetFromSnapshot(s: Snapshot, recent: { date: string; amoun
     profile: {
       name: sanitizeText(s.profile?.name ?? "", 40) || null,
       monthlyIncome: s.income,
-      fixedCosts: (s.profile?.fixed_costs ?? []).slice(0, 15).map((f) => ({ name: sanitizeText(f.name, 40), amount: f.amount })),
+      fixedCosts: (s.profile?.fixed_costs ?? []).slice(0, 15).map((f) => ({ label: sanitizeText(f.label, 40), amount: f.amount })),
     },
     currentMonth: {
       month: s.month,

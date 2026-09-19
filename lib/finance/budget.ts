@@ -4,7 +4,7 @@ import { floorTo, formatINR, round2 } from "./money";
 import type { CategoryAverage } from "./goals";
 
 export interface FixedCost {
-  name: string;
+  label: string;
   amount: number;
   category?: Category;
 }
@@ -52,8 +52,8 @@ const KEYWORDS: [RegExp, Category][] = [
   [/bus|metro|fuel|petrol|commute|transport/i, "Transport"],
 ];
 
-export function inferFixedCostCategory(name: string): Category {
-  for (const [re, category] of KEYWORDS) if (re.test(name)) return category;
+export function inferFixedCostCategory(label: string): Category {
+  for (const [re, category] of KEYWORDS) if (re.test(label)) return category;
   return "Bills & Utilities";
 }
 
@@ -79,7 +79,7 @@ export function generateBudget({ income, fixedCosts, history }: BudgetInput): Ge
 
   const fixedByCat = new Map<Category, number>();
   for (const fc of fixedCosts) {
-    const cat = fc.category && isCategory(fc.category) ? fc.category : inferFixedCostCategory(fc.name);
+    const cat = fc.category && isCategory(fc.category) ? fc.category : inferFixedCostCategory(fc.label);
     fixedByCat.set(cat, (fixedByCat.get(cat) ?? 0) + fc.amount);
   }
   const fixedTotal = [...fixedByCat.values()].reduce((a, b) => a + b, 0);

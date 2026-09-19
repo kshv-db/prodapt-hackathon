@@ -36,11 +36,15 @@ export const createExpenseBody = z.object({
 
 export const monthQuery = z.object({ month: monthString.optional() });
 
-export const fixedCost = z.object({
-  name: z.string().trim().min(1).max(60),
-  amount: nonNegativeMoney,
-  category: category.optional(),
-});
+/** Canonical fixed-cost shape is { label, amount } (profiles.fixed_costs). `name` is accepted as an alias for `label`. */
+export const fixedCost = z.preprocess(
+  (v) => (v && typeof v === "object" && "name" in v && !("label" in v) ? { ...(v as object), label: (v as { name: unknown }).name } : v),
+  z.object({
+    label: z.string().trim().min(1).max(60),
+    amount: nonNegativeMoney,
+    category: category.optional(),
+  }),
+);
 
 export const generateBudgetBody = z.object({
   income: nonNegativeMoney,

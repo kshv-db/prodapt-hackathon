@@ -274,7 +274,7 @@ describe("narrate (grounded prose)", () => {
 });
 
 describe("budget reason polishing", () => {
-  const gen = generateBudget({ income: 45_000, fixedCosts: [{ name: "Rent", amount: 12_000 }], history: [] });
+  const gen = generateBudget({ income: 45_000, fixedCosts: [{ label: "Rent", amount: 12_000 }], history: [] });
 
   it("keeps the computed limits no matter what the model says", async () => {
     setAiClientForTests(

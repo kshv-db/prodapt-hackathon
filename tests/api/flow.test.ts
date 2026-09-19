@@ -144,7 +144,7 @@ describe("authentication", () => {
 describe("end-to-end smoke flow (in-memory store, mocked OpenAI)", () => {
   it("runs the whole PRD demo path", async () => {
     // 1-2. onboarding
-    let res = await call(profile.PUT, "/api/profile", { method: "PUT", body: { name: "Meera", income: 45000, fixedCosts: [{ name: "Rent", amount: 12000 }], persona: "friendly" } });
+    let res = await call(profile.PUT, "/api/profile", { method: "PUT", body: { name: "Meera", income: 45000, fixedCosts: [{ label: "Rent", amount: 12000 }], persona: "friendly" } });
     expect(res.status).toBe(200);
     expect((await j(res)).profile).toMatchObject({ name: "Meera", monthly_income: 45000, persona: "friendly" });
 
@@ -207,7 +207,7 @@ describe("end-to-end smoke flow (in-memory store, mocked OpenAI)", () => {
     const budgetRes = await j(await call(budgets.GET, `/api/budgets?month=${month}`));
     expect(budgetRes.budgets.length).toBeGreaterThan(0);
     expect(Object.keys(budgetRes.budgets[0]).sort()).toEqual(["category", "limit", "reason"]);
-    const gen = await j(await call(generate.POST, "/api/budget/generate", { method: "POST", body: { income: 45000, fixedCosts: [{ name: "Rent", amount: 12000 }] } }));
+    const gen = await j(await call(generate.POST, "/api/budget/generate", { method: "POST", body: { income: 45000, fixedCosts: [{ label: "Rent", amount: 12000 }] } }));
     const limitSum = gen.budgets.reduce((a: number, b: { limit: number }) => a + b.limit, 0);
     expect(limitSum).toBeLessThanOrEqual(45000);
     expect(limitSum + gen.savings.limit).toBeCloseTo(45000, 2);
@@ -293,6 +293,20 @@ describe("end-to-end smoke flow (in-memory store, mocked OpenAI)", () => {
   });
 });
 
+describe("demo seed", () => {
+  it("needs onboarding first (409, canonical seed_demo_data never invents a profile) and re-running does not duplicate", async () => {
+    const user = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    const res = await call(seed.POST, "/api/demo/seed", { user, method: "POST" });
+    expect(res.status).toBe(409);
+    expect((await j(res)).error).toMatch(/onboarding/);
+    await call(profile.PUT, "/api/profile", { user, method: "PUT", body: { name: "E", income: 45000 } });
+    expect(await j(await call(seed.POST, "/api/demo/seed", { user, method: "POST" }))).toEqual({ ok: true });
+    const n = db.expenses.filter((e) => e.user_id === user).length;
+    await call(seed.POST, "/api/demo/seed", { user, method: "POST" });
+    expect(db.expenses.filter((e) => e.user_id === user)).toHaveLength(n);
+  });
+});
+
 describe("ownership / isolation", () => {
   it("one user cannot read, delete or modify another user's data through the API", async () => {
     await call(seed.POST, "/api/demo/seed", { method: "POST" });
@@ -361,7 +375,7 @@ describe("input validation and error format", () => {
     expect(await bad(profile.PUT, "/api/profile", {}, "PUT")).toMatch(/at least one/);
     expect(await bad(chat.POST, "/api/chat", { message: "" })).toMatch(/message/);
     expect(await bad(budgets.PUT, "/api/budgets", { budgets: [{ category: "Nope", limit: 5 }] }, "PUT")).toMatch(/category/);
-    expect(await bad(generate.POST, "/api/budget/generate", { income: 10000, fixedCosts: [{ name: "Rent", amount: 12000 }] })).toMatch(/exceed/);
+    expect(await bad(generate.POST, "/api/budget/generate", { income: 10000, fixedCosts: [{ label: "Rent", amount: 12000 }] })).toMatch(/exceed/);
     expect(await bad(generate.POST, "/api/budget/generate", { income: 0, fixedCosts: [] })).toMatch(/income/);
     expect(await bad(parse.POST, "/api/expenses/parse", { text: "x", today: "yesterday" })).toMatch(/today/);
     expect(await bad(whatif.POST, "/api/whatif", { description: "x", monthlyCost: 0, months: 3 })).toMatch(/monthlyCost/);

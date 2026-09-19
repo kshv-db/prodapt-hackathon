@@ -15,7 +15,6 @@ import type {
   NewGoal,
   Profile,
   ProfileUpdate,
-  SeedPayload,
   Store,
 } from "./store";
 
@@ -30,7 +29,8 @@ export function dbError(error: PostgrestError, action: string): AppError {
 
 const num = (v: unknown): number => Number(v);
 
-const toExpense = (r: Expense): Expense => ({ ...r, amount: num(r.amount) });
+// expenses.merchant is nullable in the canonical schema; the API always exposes a string.
+const toExpense = (r: Expense): Expense => ({ ...r, amount: num(r.amount), merchant: r.merchant ?? "" });
 const toGoal = (r: Goal): Goal => ({ ...r, target_amount: num(r.target_amount), saved_amount: num(r.saved_amount) });
 const toBudget = (r: BudgetRow): BudgetRow => ({ ...r, limit_amount: num(r.limit_amount) });
 const toProfile = (r: Profile): Profile => ({ ...r, monthly_income: num(r.monthly_income) });
@@ -48,11 +48,12 @@ export class SupabaseStore implements Store {
   }
 
   async upsertProfile(update: ProfileUpdate): Promise<Profile> {
-    const { data, error } = await this.db
-      .from("profiles")
-      .upsert({ id: this.userId, ...update }, { onConflict: "id" })
-      .select("*")
-      .single();
+    // profiles.name is NOT NULL, so an INSERT-based upsert would fail on partial updates. Insert or update explicitly.
+    const existing = await this.getProfile();
+    const query = existing
+      ? this.db.from("profiles").update(update).eq("id", this.userId)
+      : this.db.from("profiles").insert({ id: this.userId, name: "", ...update });
+    const { data, error } = await query.select("*").single();
     if (error) throw dbError(error, "upsertProfile");
     return toProfile(data as Profile);
   }
@@ -214,15 +215,8 @@ export class SupabaseStore implements Store {
     return data as ChatMessage;
   }
 
-  async seedDemo(p: SeedPayload): Promise<boolean> {
-    const { data, error } = await this.db.rpc("seed_demo", {
-      p_profile: p.profile,
-      p_expenses: p.expenses,
-      p_budget_month: p.budgetMonth,
-      p_budgets: p.budgets,
-      p_goals: p.goals,
-    });
-    if (error) throw dbError(error, "seed_demo");
-    return data === true;
+  async seedDemo(): Promise<void> {
+    const { error } = await this.db.rpc("seed_demo_data");
+    if (error) throw dbError(error, "seed_demo_data");
   }
 }

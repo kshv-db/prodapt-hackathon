@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { aggregateSpend, calculateCategoryAverages, type SpendAggregates } from "@/lib/finance/aggregate";
-import { monthOf, monthStart, nextMonthStart } from "@/lib/finance/dates";
+import { monthOf, monthStart, nextMonthStart, todayISO } from "@/lib/finance/dates";
+import { buildSeedPayload } from "./seed-double";
 import type { CategoryAverage } from "@/lib/finance/goals";
 import type {
   BudgetInputRow,
@@ -13,7 +14,6 @@ import type {
   NewGoal,
   Profile,
   ProfileUpdate,
-  SeedPayload,
   Store,
 } from "@/lib/server/store";
 
@@ -51,7 +51,7 @@ class MemoryStore implements Store {
     const existing = this.db.profiles.get(this.userId);
     const next: Profile = {
       id: this.userId,
-      name: null,
+      name: "",
       monthly_income: 0,
       fixed_costs: [],
       persona: "friendly",
@@ -154,22 +154,17 @@ class MemoryStore implements Store {
     return row;
   }
 
-  async seedDemo(p: SeedPayload) {
-    if (this.mine(this.db.expenses).some((e) => e.source === "seed")) return false;
-    const existing = this.db.profiles.get(this.userId);
-    await this.upsertProfile({
-      name: existing?.name ?? p.profile.name,
-      monthly_income: existing && existing.monthly_income > 0 ? existing.monthly_income : p.profile.monthly_income,
-      fixed_costs: existing && existing.fixed_costs.length > 0 ? existing.fixed_costs : p.profile.fixed_costs,
-    });
+  /** Mirrors canonical seed_demo_data(): needs a profile; replaces this user's previous seed rows. */
+  async seedDemo() {
+    const profile = this.db.profiles.get(this.userId);
+    if (!profile) throw new Error("No profile found for this user");
+    const p = buildSeedPayload(todayISO(), { income: profile.monthly_income > 0 ? profile.monthly_income : undefined });
+    this.db.expenses = this.db.expenses.filter((e) => !(e.user_id === this.userId && e.source === "seed"));
+    this.db.goals = this.db.goals.filter((g) => !(g.user_id === this.userId && p.goals.some((x) => x.title === g.title)));
     for (const e of p.expenses) await this.insertExpense(e);
-    for (const b of p.budgets) {
-      if (!this.db.budgets.some((x) => x.user_id === this.userId && x.month === p.budgetMonth && x.category === b.category)) {
-        this.db.budgets.push({ id: randomUUID(), user_id: this.userId, month: p.budgetMonth, category: b.category, limit_amount: b.limit, reason: b.reason });
-      }
-    }
+    this.db.budgets = this.db.budgets.filter((b) => !(b.user_id === this.userId && b.month === p.budgetMonth));
+    for (const b of p.budgets) this.db.budgets.push({ id: randomUUID(), user_id: this.userId, month: p.budgetMonth, category: b.category, limit_amount: b.limit, reason: b.reason });
     for (const g of p.goals) await this.insertGoal(g);
-    return true;
   }
 }
 

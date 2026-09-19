@@ -16,9 +16,9 @@ Browser -> Next.js route handlers (/app/api) -> apiRoute(): Supabase Auth (JWT v
 |---|---|
 | `lib/finance/*` | Pure, deterministic, unit-tested: `projection`, `goals`, `health`, `budget`, `savings`, `whatif`, `aggregate`, `dates`, `money`, `categories` (the ONE category list). No DB, no AI. |
 | `lib/ai/*` | OpenAI client + `config.ts` (model IDs), `personas.ts`, `prompts.ts` (security + grounding rules), `structured.ts` (schema -> validate -> retry once -> safe error), `grounding.ts` (numeric check of generated prose), `expense-parser`, `categorizer`, `budget-reasons`, `narrator` (grounded prose + deterministic fallback), `chat`. |
-| `lib/server/*` | `store.ts` (data-access interface, bound to ONE user), `supabase-store.ts`, `analytics.ts` (snapshot of derived numbers), `fact-sheet.ts` (`buildFinancialFactSheet`), `services.ts` (summary, budgets, goal plan, Future You, what-if, insight, seed), `seed-data.ts`. |
+| `lib/server/*` | `store.ts` (data-access interface, bound to ONE user), `supabase-store.ts`, `analytics.ts` (snapshot of derived numbers), `fact-sheet.ts` (`buildFinancialFactSheet`), `services.ts` (summary, budgets, goal plan, Future You, what-if, insight, seed). |
 | `lib/api/*` | `apiRoute()` wrapper (auth + error mapping), `schemas.ts` (all request validation), `rate-limit.ts`. |
-| `supabase/migrations/20260919000000_init.sql` | Tables, checks, indexes, RLS, SQL functions. |
+| `supabase/migrations/20260919000005_backend_functions.sql` | **Only** backend-owned SQL: 4 `SECURITY INVOKER` functions (see below). The schema, indexes, RLS and demo seed are owned by `feature/db` (migrations `..0001`-`..0004`) and are not duplicated here. |
 
 ## Request flow
 
@@ -39,7 +39,7 @@ Fields marked **(+)** are additive to the PRD table (optional to consume).
 | `DELETE /expenses/:id` | - | `{ ok: true }` (404 if missing or not yours) |
 | `POST /expenses/import` | multipart, field `file` = CSV (`date,description,amount`, max 500 rows / 1 MB) | `{ rows: [{ date, description, amount, category, confidence, needs_review(+) }], skipped(+): [{ line, reason }] }`. Nothing is saved; the client saves confirmed rows via `POST /expenses` with `source: "csv"`. `needs_review` = confidence < 0.7. |
 | `GET /summary` | `?month=YYYY-MM` | `{ total, income, byCategory: [{category,total,percent}], trend: [{month,total}] (6, oldest first, zero-filled), topMerchants: [{merchant,total,count}] (<=5), budgetUsage: [{category,limit,spent,percent,status:"ok"\|"warning"\|"over"}], healthScore (0-100 int), healthReason, month(+), budgetTotal(+), healthBreakdown(+): {savings,budget,goals,impulse}: {points,max}, insight(+): {id,kind,body,created_at}\|null }` |
-| `POST /budget/generate` | `{ income, fixedCosts: [{ name, amount, category? }] }` | `{ budgets: [{ category, limit, reason }] (all 12), savings(+): { limit, reason }, totals(+) }`. Computes only; does **not** save. `sum(limits) + savings.limit == income`. |
+| `POST /budget/generate` | `{ income, fixedCosts: [{ label, amount, category? }] }` | `{ budgets: [{ category, limit, reason }] (all 12), savings(+): { limit, reason }, totals(+) }`. Computes only; does **not** save. `sum(limits) + savings.limit == income`. |
 | `GET /budgets` | `?month=YYYY-MM` | `{ budgets: [{ category, limit, reason }] }` |
 | `PUT /budgets` | `{ budgets: [{ category, limit>=0, reason? }], month?(+) }` (month also via `?month=`) | `{ budgets[] }`. **Replaces** that month's budget with the list. 400 if total > monthly income, income unset, duplicate categories. |
 | `GET /goals` | - | `{ goals[] }` (DB shape: `id,title,target_amount,saved_amount,deadline,created_at`) |
@@ -53,7 +53,7 @@ Fields marked **(+)** are additive to the PRD table (optional to consume).
 | `POST /insights/refresh` | - | `{ insight: { id, kind: "dashboard", body, created_at } }` (persisted) |
 | `PUT /profile` | `{ name?, income?, fixedCosts?, persona? }` (any subset, >=1 field) | `{ profile }` (DB shape: `id,name,monthly_income,fixed_costs,persona,created_at`). Upserts, so this is also the onboarding call. |
 | `GET /profile` (+) | - | `{ profile \| null }` |
-| `POST /demo/seed` | - | `{ ok: true }`. Idempotent (a second click inserts nothing). |
+| `POST /demo/seed` | - | `{ ok: true }`. Calls the canonical `seed_demo_data()` RPC. Needs a profile first (else `409`). Re-running replaces the previous seed rows (no duplicates); manual expenses are kept. |
 
 `budgetImpact`: `{ monthlyCost, months, totalCost, incomeShare, savingsBefore, savingsAfter, shortfall, savingsRateBefore, savingsRateAfter }`.
 `goalDelays[]`: `{ goalId, title, monthsBefore|null, monthsAfter|null, delayMonths|null, missesDeadline, missedDeadlineBefore }` (null = unreachable at current savings).
@@ -64,7 +64,7 @@ Status codes: 400 invalid input, 401 unauthenticated, 404 not found / not yours,
 
 The PRD fixes endpoint names and top-level keys but not these inner shapes. Nothing was renamed; these are the choices:
 
-1. `fixedCosts[]` item = `{ name: string, amount: number, category?: Category }` (also stored in `profiles.fixed_costs`).
+1. `fixedCosts[]` item = `{ label: string, amount: number, category?: Category }`, stored as-is in `profiles.fixed_costs`. `label`/`amount` is the shape documented by feature/db; `category` is an optional extra key; `name` is accepted on input as an alias of `label`.
 2. `budgets[]` item = `{ category, limit, reason }` (API says `limit`; column is `limit_amount`).
 3. The "savings line" is **not** a category (the 12-category list is fixed). It is returned as `savings` next to `budgets` from `/budget/generate` and equals `income - sum(limits)`; it is not stored.
 4. `PUT /budgets` needs a month: `?month=`, `body.month`, else current month.
@@ -74,7 +74,8 @@ The PRD fixes endpoint names and top-level keys but not these inner shapes. Noth
 8. `POST /expenses/parse` with no amount returns `amount: 0` (keeps the field a number) plus `needs_clarification`.
 9. Additive: `GET /profile`, `GET /chat`, `spent_at` on expenses (needed for the late-night impulse component), `summary.insight`.
 10. DELETE/plan/contribute on another user's id returns **404**, not 403: RLS makes foreign rows indistinguishable from missing ones (avoids leaking existence).
-11. Schema: **no changes** to the PRD tables. Added only CHECK constraints (amount > 0, category list, persona, source, role, first-of-month), `user_id default auth.uid()`, indexes, and SQL functions.
+11. Schema: **no changes** to the canonical schema. The backend adds only the four functions below. `merchant` is nullable in the DB; the API always returns a string (`""` when null). `profiles.name` is NOT NULL, so a profile created before a name is known is stored with `""`.
+12. Demo data is the canonical `seed_demo_data()`: random amounts relative to `current_date`, current month filled to day 27 (may include future-dated rows), goals `New Laptop` (55,000, 6 months) and `Emergency Fund`. It does **not** guarantee an off-track goal (the PRD demo step 4). If income is 0 the seed budgets assume 45,000 but the profile income stays 0. Both are candidates for a feature/db follow-up; the backend does not work around them.
 
 ## Finance rules that the PRD leaves open (all in `lib/finance`, all unit-tested)
 
@@ -96,14 +97,25 @@ The PRD fixes endpoint names and top-level keys but not these inner shapes. Noth
 
 ## Environment variables (names only)
 
-`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `OPENAI_API_KEY`, optional `OPENAI_MODEL_FAST`, `OPENAI_MODEL_MID`. See `.env.example`.
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `OPENAI_API_KEY`, optional `OPENAI_MODEL_FAST`, `OPENAI_MODEL_MID`. `SUPABASE_SERVICE_ROLE_KEY` is listed in `.env.example` by feature/db but the backend never reads it. See `.env.example`.
 
 ## Setup
 
-1. Create a Supabase project; run `supabase/migrations/20260919000000_init.sql` (SQL editor or `supabase db push`).
+1. Create a Supabase project and apply ALL migrations in `supabase/migrations/` in order (`supabase db push`): `..0001`-`..0004` from feature/db, then `..0005_backend_functions.sql` from this branch.
 2. Copy `.env.example` to `.env.local` and fill it in.
-3. `npm run dev`. Sign in with Supabase Auth on the frontend (`lib/supabase/browser.ts`), then call `/api/*`.
+3. `npm run dev`. Sign in with Supabase Auth on the frontend (`createBrowserClient` from `@supabase/ssr`, anon key only), then call `/api/*`.
+
+## Backend-owned SQL (`20260919000005_backend_functions.sql`)
+
+Functions only; no tables, indexes, constraints or policies. All are `SECURITY INVOKER` (canonical RLS applies) and also filter on `auth.uid()`.
+
+| Function | Why it cannot be a plain query |
+|---|---|
+| `spend_aggregates(month, discretionary[], late_from, late_until)` | Dashboard totals, categories, top merchants, 6-month trend in one round trip instead of fetching rows. Mirrors `lib/finance/aggregate.ts`; a parity test compares them. |
+| `category_averages(month, months)` | 3-month per-category averages for budget generation and goal cuts. |
+| `contribute_to_goal(goal_id, amount)` | Atomic `saved_amount + x` (no read-modify-write race). |
+| `replace_budgets(month, rows)` | Atomic replace of one month's budget on the canonical `unique(user_id, month, category)` key. |
 
 ## Tests
 
-`npm test` runs: finance unit tests, AI-layer tests (mock model), route-level flow tests (in-memory store, mock model), and DB tests on real Postgres (PGlite) that apply the actual migration and check RLS, constraints, SQL/TS aggregate parity and seed idempotency. `tests/live/parse-eval.test.ts` (18/20 parse accuracy) runs only when `OPENAI_API_KEY` is set.
+`npm test` runs: finance unit tests, AI-layer tests (mock model), route-level flow tests (in-memory store, mock model), and DB tests on real Postgres (PGlite) that apply the canonical migrations (read from `origin/feature/db` git objects until that branch is merged, then from `supabase/migrations`) plus the backend function migration, and check RLS, constraints, the canonical seed, and SQL/TS aggregate parity. Route-level flow tests use an in-memory store with a deterministic seed test double (`tests/helpers/seed-double.ts`, not shipped code). `tests/live/parse-eval.test.ts` (18/20 parse accuracy) runs only when `OPENAI_API_KEY` is set.

@@ -3,14 +3,24 @@ import { addDays, addMonths, addMonthsClamped, daysBetween, monthOf, monthStart 
 import { calculateSavingsBaseline } from "@/lib/finance/savings";
 import { generateBudget } from "@/lib/finance/budget";
 import type { Category } from "@/lib/finance/categories";
-import type { NewExpense, SeedPayload } from "./store";
+import type { NewExpense, NewGoal, FixedCostRow } from "@/lib/server/store";
+
+/** TEST DOUBLE ONLY. Production seeding is the canonical SQL function seed_demo_data() (feature/db). This
+ * deterministic generator lets route-level tests exercise a demo dataset whose laptop goal is off track. */
+export interface SeedPayload {
+  profile: { name: string; monthly_income: number; fixed_costs: FixedCostRow[]; persona: "friendly" };
+  expenses: NewExpense[];
+  budgetMonth: string;
+  budgets: { category: Category; limit: number; reason: string }[];
+  goals: NewGoal[];
+}
 
 /** Demo persona: "Meera" - first job, rent + EMI leave little slack, heavy late-night food orders. */
 export const DEMO_INCOME = 45_000;
 export const DEMO_FIXED_COSTS = [
-  { name: "Rent", amount: 12_000, category: "Rent & EMI" as Category },
-  { name: "Phone EMI", amount: 2_000, category: "Rent & EMI" as Category },
-  { name: "Wifi + electricity", amount: 1_800, category: "Bills & Utilities" as Category },
+  { label: "Rent", amount: 12_000, category: "Rent & EMI" as Category },
+  { label: "Phone EMI", amount: 2_000, category: "Rent & EMI" as Category },
+  { label: "Wifi + electricity", amount: 1_800, category: "Bills & Utilities" as Category },
 ];
 
 interface Template {

@@ -3,15 +3,16 @@ import type { SpendAggregates } from "@/lib/finance/aggregate";
 import type { CategoryAverage } from "@/lib/finance/goals";
 
 /** Row shapes mirror the PRD data model (section 7). */
+/** profiles.fixed_costs element. Canonical shape (feature/db): { label, amount }; `category` is an optional extra key. */
 export interface FixedCostRow {
-  name: string;
+  label: string;
   amount: number;
   category?: Category;
 }
 
 export interface Profile {
   id: string;
-  name: string | null;
+  name: string;
   monthly_income: number;
   fixed_costs: FixedCostRow[];
   persona: PersonaId;
@@ -90,18 +91,10 @@ export interface ChatMessage {
 }
 
 export interface ProfileUpdate {
-  name?: string | null;
+  name?: string;
   monthly_income?: number;
   fixed_costs?: FixedCostRow[];
   persona?: PersonaId;
-}
-
-export interface SeedPayload {
-  profile: { name: string; monthly_income: number; fixed_costs: FixedCostRow[]; persona: PersonaId };
-  expenses: NewExpense[];
-  budgetMonth: string; // YYYY-MM-01
-  budgets: { category: Category; limit: number; reason: string }[];
-  goals: NewGoal[];
 }
 
 /**
@@ -138,6 +131,6 @@ export interface Store {
   listChat(limit: number): Promise<ChatMessage[]>; // oldest -> newest
   insertChat(role: "user" | "assistant", content: string): Promise<ChatMessage>;
 
-  /** Idempotent: returns false (and inserts nothing) if seed data already exists. */
-  seedDemo(payload: SeedPayload): Promise<boolean>;
+  /** Calls the canonical `seed_demo_data()` RPC (feature/db). Requires an existing profile. Re-running replaces the prior seed rows. */
+  seedDemo(): Promise<void>;
 }

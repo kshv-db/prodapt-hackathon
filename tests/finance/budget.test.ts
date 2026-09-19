@@ -3,9 +3,9 @@ import { CATEGORIES } from "@/lib/finance/categories";
 import { generateBudget, inferFixedCostCategory } from "@/lib/finance/budget";
 
 const fixedCosts = [
-  { name: "Rent", amount: 12_000 },
-  { name: "Phone EMI", amount: 2_000 },
-  { name: "Wifi", amount: 1_000 },
+  { label: "Rent", amount: 12_000 },
+  { label: "Phone EMI", amount: 2_000 },
+  { label: "Wifi", amount: 1_000 },
 ];
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
@@ -22,7 +22,7 @@ describe("generateBudget", () => {
 
   it("income = category limits + savings line (exactly), so limits never exceed income", () => {
     for (const income of [15_000, 45_000, 80_000, 500_000]) {
-      const r = generateBudget({ income, fixedCosts: [{ name: "Rent", amount: Math.min(income / 3, 12_000) }], history: [] });
+      const r = generateBudget({ income, fixedCosts: [{ label: "Rent", amount: Math.min(income / 3, 12_000) }], history: [] });
       const limits = sum(r.budgets.map((b) => b.limit));
       expect(limits).toBeLessThanOrEqual(income);
       expect(Math.round((limits + r.savings.limit) * 100)).toBe(income * 100);
@@ -59,7 +59,7 @@ describe("generateBudget", () => {
   it("scales limits down proportionally when history exceeds what is affordable", () => {
     const r = generateBudget({
       income: 20_000,
-      fixedCosts: [{ name: "Rent", amount: 10_000 }],
+      fixedCosts: [{ label: "Rent", amount: 10_000 }],
       history: [
         { category: "Food & Dining", avg: 10_000 },
         { category: "Shopping", avg: 10_000 },
@@ -71,7 +71,7 @@ describe("generateBudget", () => {
   });
 
   it("fixed costs equal to income leave zero flexible budget and zero savings", () => {
-    const r = generateBudget({ income: 20_000, fixedCosts: [{ name: "Rent", amount: 20_000 }], history: [] });
+    const r = generateBudget({ income: 20_000, fixedCosts: [{ label: "Rent", amount: 20_000 }], history: [] });
     expect(r.savings.limit).toBe(0);
     expect(sum(r.budgets.map((b) => b.limit))).toBe(20_000);
   });
@@ -80,8 +80,8 @@ describe("generateBudget", () => {
     expect(() => generateBudget({ income: 0, fixedCosts: [], history: [] })).toThrow(/income/);
     expect(() => generateBudget({ income: -5, fixedCosts: [], history: [] })).toThrow();
     expect(() => generateBudget({ income: Number.NaN, fixedCosts: [], history: [] })).toThrow();
-    expect(() => generateBudget({ income: 10_000, fixedCosts: [{ name: "Rent", amount: 12_000 }], history: [] })).toThrow(/exceed/);
-    expect(() => generateBudget({ income: 10_000, fixedCosts: [{ name: "x", amount: -1 }], history: [] })).toThrow();
+    expect(() => generateBudget({ income: 10_000, fixedCosts: [{ label: "Rent", amount: 12_000 }], history: [] })).toThrow(/exceed/);
+    expect(() => generateBudget({ income: 10_000, fixedCosts: [{ label: "x", amount: -1 }], history: [] })).toThrow();
   });
 
   it("is deterministic", () => {
@@ -91,7 +91,7 @@ describe("generateBudget", () => {
   });
 
   it("an explicit fixed-cost category overrides keyword inference", () => {
-    const r = generateBudget({ income: 30_000, fixedCosts: [{ name: "Gym", amount: 1_000, category: "Entertainment" }], history: [] });
+    const r = generateBudget({ income: 30_000, fixedCosts: [{ label: "Gym", amount: 1_000, category: "Entertainment" }], history: [] });
     expect(r.budgets.find((b) => b.category === "Entertainment")!.limit).toBeGreaterThanOrEqual(1_000);
   });
 });

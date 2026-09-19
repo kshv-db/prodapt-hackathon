@@ -6,11 +6,10 @@ import { calculateGoalPlan, suggestCut, type SuggestedCut } from "@/lib/finance/
 import { formatINR, round2 } from "@/lib/finance/money";
 import { calculateProjection, finalBalance, ASSUMED_ANNUAL_RETURN, type ProjectionPoint } from "@/lib/finance/projection";
 import { calculateWhatIf } from "@/lib/finance/whatif";
-import { badRequest, notFound } from "@/lib/errors";
+import { badRequest, conflict, notFound } from "@/lib/errors";
 import { polishBudgetReasons } from "@/lib/ai/budget-reasons";
 import { loadSnapshot } from "./analytics";
 import { buildFinancialFactSheet, type FinancialFactSheet } from "./fact-sheet";
-import { buildSeedPayload } from "./seed-data";
 import type { BudgetInputRow, Store } from "./store";
 import type { PersonaId } from "@/lib/finance/categories";
 
@@ -301,11 +300,13 @@ function fallbackInsight(f: FinancialFactSheet): string {
 
 /* -------------------------------------------------------------------- Seed */
 
-export async function seedDemo(store: Store, today: string): Promise<void> {
-  const existing = await store.getProfile();
-  const income = existing && existing.monthly_income > 0 ? existing.monthly_income : undefined;
-  const payload = buildSeedPayload(today, { income, name: existing?.name ?? undefined });
-  await store.seedDemo(payload); // idempotent: a second call inserts nothing
+/**
+ * Delegates to the canonical seed_demo_data() SQL function (feature/db). It refuses to invent a profile,
+ * so onboarding (PUT /profile) must happen first. Re-running replaces the previous seed rows.
+ */
+export async function seedDemo(store: Store): Promise<void> {
+  if (!(await store.getProfile())) throw conflict("Complete onboarding (PUT /api/profile) before loading demo data");
+  await store.seedDemo();
 }
 
 export { monthStart };

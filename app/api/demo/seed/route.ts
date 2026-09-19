@@ -1,12 +1,11 @@
 import { apiRoute } from "@/lib/api/handler";
-import { todayISO } from "@/lib/finance/dates";
 import { seedDemo } from "@/lib/server/services";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Idempotent: a second call for the same user inserts nothing and still returns { ok: true }. */
+/** Delegates to the canonical seed_demo_data() RPC. Re-running replaces the previous seed rows (no duplicates). */
 export const POST = apiRoute(async ({ store }) => {
-  await seedDemo(store, todayISO());
+  await seedDemo(store);
   return { ok: true };
 });
