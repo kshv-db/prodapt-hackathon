@@ -1,0 +1,22 @@
+# Environment secrets — never commit real values
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node (future Next.js frontend/backend per PRD)
+node_modules/
+.next/
+dist/
+
+# Supabase CLI local state
+supabase/.branches/
+supabase/.temp/
+
+# OS
+.DS_Store
