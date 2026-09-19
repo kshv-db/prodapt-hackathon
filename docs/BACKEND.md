@@ -97,7 +97,7 @@ The PRD fixes endpoint names and top-level keys but not these inner shapes. Noth
 
 ## Environment variables (names only)
 
-`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `OPENAI_API_KEY`, optional `OPENAI_MODEL_FAST`, `OPENAI_MODEL_MID`. `SUPABASE_SERVICE_ROLE_KEY` is listed in `.env.example` by feature/db but the backend never reads it. See `.env.example`.
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `OPENAI_API_KEY`, optional `OPENAI_MODEL_FAST`, `OPENAI_MODEL_MID` (model overrides, not in `.env.example` to keep it identical to feature/db). `SUPABASE_SERVICE_ROLE_KEY` is listed in `.env.example` by feature/db but the backend never reads it. See `.env.example`.
 
 ## Setup
 

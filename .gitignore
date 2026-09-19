@@ -1,9 +1,7 @@
-# Environment secrets - never commit real values
+# Environment secrets — never commit real values
 .env
 .env.local
 .env.*.local
-.env.*
-!.env.example
 
 # Python
 __pycache__/
@@ -11,17 +9,10 @@ __pycache__/
 .venv/
 venv/
 
-# Node / Next.js
+# Node (future Next.js frontend/backend per PRD)
 node_modules/
 .next/
-out/
-build/
 dist/
-coverage/
-*.tsbuildinfo
-next-env.d.ts
-.vercel/
-npm-debug.log*
 
 # Supabase CLI local state
 supabase/.branches/
